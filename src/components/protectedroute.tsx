@@ -2,7 +2,7 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 
-type Role = "ADMIN" | "CERTIFICATION_OFFICER" | "INSPECTOR";
+type Role = "ADMIN" | "COMPANY" | "INSPECTOR";
 
 interface Props {
   children: React.ReactNode;
@@ -10,9 +10,9 @@ interface Props {
 }
 
 const ROLE_HOME: Record<Role, string> = {
-  ADMIN:                 "/dashboard",
-  CERTIFICATION_OFFICER: "/certificate-officer/record-product",
-  INSPECTOR:             "/inspector/dashboard",
+  ADMIN:     "/dashboard",
+  COMPANY:   "/certificate-officer/record-product",
+  INSPECTOR: "/inspector/dashboard",
 };
 
 const ProtectedRoute = ({ children, allowedRoles }: Props) => {

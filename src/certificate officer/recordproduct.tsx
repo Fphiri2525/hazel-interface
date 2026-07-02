@@ -17,11 +17,6 @@ const DISTRIBUTION_API_URL = `${API_BASE_URL}/api/record-distribution`;
 const inputBase =
   "w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
 
-// ── Shape returned by the distribution endpoint ──
-// This form is filled in by an approved company to say: "we sold this
-// product, from this batch, to this buyer." That record is what lets an
-// inspector later trace a batch by its expiry date back to the seller and
-// buyer.
 interface DistributionListItem {
   id: number;
   productName: string;
@@ -41,6 +36,7 @@ interface DistributionListItem {
   invoiceReference: string | null;
   notes: string | null;
   recordedBy: { name: string | null; email: string | null };
+  companyName: string | null; // returned by the existing GET route's JOIN on companies
   createdAt: string;
 }
 
@@ -99,22 +95,20 @@ export default function RecordDistribution({ onSave, onCancel }: RecordDistribut
   );
   const loggedInEmail: string = storedUser?.email ?? "";
   const loggedInName: string = storedUser?.full_name ?? "";
-
-  // ── View: list of past sales, or the form to record a new one ──
+  const loggedInCompanyName: string = storedUser?.company_name ?? "";
+  // Company is fetched from the backend (GET /api/my-company) rather than
+  // trusted from localStorage, since Login.tsx doesn't currently store
   const [view, setView] = React.useState<"list" | "form" | "saved">("list");
 
-  // ── Distribution / sale history ──
   const [distributions, setDistributions] = React.useState<DistributionListItem[]>([]);
   const [historyLoading, setHistoryLoading] = React.useState(false);
   const [historyError, setHistoryError] = React.useState("");
   const [batchSearch, setBatchSearch] = React.useState("");
 
-  // ── Form fields: the product that was sold, and by whom ──
   const [productName, setProductName] = React.useState("");
   const [category, setCategory] = React.useState("");
   const [batchNumber, setBatchNumber] = React.useState("");
   const [expiryDate, setExpiryDate] = React.useState("");
-  const [sellerCompany, setSellerCompany] = React.useState("");
   const [quantity, setQuantity] = React.useState("");
   const [unitPrice, setUnitPrice] = React.useState("");
   const [transactionDate, setTransactionDate] = React.useState("");
@@ -122,7 +116,6 @@ export default function RecordDistribution({ onSave, onCancel }: RecordDistribut
   const [invoiceReference, setInvoiceReference] = React.useState("");
   const [notes, setNotes] = React.useState("");
 
-  // ── Form fields: buyer / receiving company ──
   const [buyerCompanyName, setBuyerCompanyName] = React.useState("");
   const [buyerRegistrationNumber, setBuyerRegistrationNumber] = React.useState("");
   const [buyerContactPerson, setBuyerContactPerson] = React.useState("");
@@ -137,6 +130,8 @@ export default function RecordDistribution({ onSave, onCancel }: RecordDistribut
     setHistoryLoading(true);
     setHistoryError("");
     try {
+      // Same route as before, unmodified — GET /api/record-distribution
+      // returns every company's records with companyName attached.
       const response = await fetch(DISTRIBUTION_API_URL, { method: "GET" });
       const data: DistributionListResponse = await response.json();
       if (!response.ok || !data.success) {
@@ -144,7 +139,15 @@ export default function RecordDistribution({ onSave, onCancel }: RecordDistribut
         setDistributions([]);
         return;
       }
-      setDistributions(data.distributions || []);
+
+      // Filter client-side to just this user's company, since the route
+      // itself isn't scoped by company.
+      const all = data.distributions || [];
+      const scoped = loggedInCompanyName
+        ? all.filter((d) => d.companyName === loggedInCompanyName)
+        : all;
+
+      setDistributions(scoped);
     } catch (err) {
       setHistoryError("Could not reach the server. Please try again.");
       setDistributions([]);
@@ -162,7 +165,6 @@ export default function RecordDistribution({ onSave, onCancel }: RecordDistribut
     setView("form");
   }
 
-  // Land on the traceability list by default.
   React.useEffect(() => {
     fetchDistributions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -173,7 +175,6 @@ export default function RecordDistribution({ onSave, onCancel }: RecordDistribut
     setCategory("");
     setBatchNumber("");
     setExpiryDate("");
-    setSellerCompany("");
     setQuantity("");
     setUnitPrice("");
     setTransactionDate("");
@@ -198,7 +199,6 @@ export default function RecordDistribution({ onSave, onCancel }: RecordDistribut
     !!productName.trim() &&
     !!batchNumber.trim() &&
     !!expiryDate &&
-    !!sellerCompany.trim() &&
     !!quantity &&
     Number(quantity) > 0 &&
     !!transactionDate &&
@@ -219,7 +219,6 @@ export default function RecordDistribution({ onSave, onCancel }: RecordDistribut
       category,
       batchNumber,
       expiryDate,
-      sellerCompany,
       quantity: Number(quantity),
       unitPrice: unitPrice ? Number(unitPrice) : null,
       transactionDate,
@@ -336,8 +335,9 @@ export default function RecordDistribution({ onSave, onCancel }: RecordDistribut
           <div>
             <h1 className="text-xl font-semibold text-foreground">Distribution records</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Every sale of a certified product to another company. Search by batch number to
-              trace where stock went during an alert.
+              {loggedInCompanyName
+                ? `Sales recorded by ${loggedInCompanyName}. Search by batch number to trace stock.`
+                : "Every sale of a certified product to another company. Search by batch number to trace where stock went during an alert."}
             </p>
           </div>
           <div className="flex gap-2">
@@ -397,12 +397,13 @@ export default function RecordDistribution({ onSave, onCancel }: RecordDistribut
 
         {!historyLoading && !historyError && filtered.length > 0 && (
           <div className="overflow-x-auto rounded-lg border border-border bg-card shadow-sm">
-            <table className="w-full min-w-[960px] text-left text-sm">
+            <table className="w-full min-w-[1040px] text-left text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/40">
                   <th className="px-4 py-3 font-medium text-muted-foreground">Product</th>
                   <th className="px-4 py-3 font-medium text-muted-foreground">Batch</th>
                   <th className="px-4 py-3 font-medium text-muted-foreground">Expiry</th>
+                  <th className="px-4 py-3 font-medium text-muted-foreground">Company</th>
                   <th className="px-4 py-3 font-medium text-muted-foreground">Seller</th>
                   <th className="px-4 py-3 font-medium text-muted-foreground">Sold to</th>
                   <th className="px-4 py-3 font-medium text-muted-foreground">Destination</th>
@@ -417,6 +418,7 @@ export default function RecordDistribution({ onSave, onCancel }: RecordDistribut
                     <td className="px-4 py-3 font-medium text-foreground">{d.productName}</td>
                     <td className="px-4 py-3 font-mono text-xs text-foreground">{d.batchNumber}</td>
                     <td className="px-4 py-3 text-foreground">{d.expiryDate || "—"}</td>
+                    <td className="px-4 py-3 text-foreground">{d.companyName || "—"}</td>
                     <td className="px-4 py-3 text-foreground">{d.sellerCompany}</td>
                     <td className="px-4 py-3 text-foreground">{d.buyerCompanyName}</td>
                     <td className="px-4 py-3 text-foreground">{d.destinationAddress}</td>
@@ -444,8 +446,8 @@ export default function RecordDistribution({ onSave, onCancel }: RecordDistribut
         <div>
           <h1 className="text-xl font-semibold text-foreground">Record Sale / Distribution</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Record the product that was sold, who sold it, and who it was sold to — so it can be
-            traced by its expiry date if an alert comes up.
+            Record the product that was sold and who it was sold to — so it can be traced by its
+            expiry date if an alert comes up.
           </p>
         </div>
         <button
@@ -507,15 +509,6 @@ export default function RecordDistribution({ onSave, onCancel }: RecordDistribut
             className={inputBase}
             value={expiryDate}
             onChange={(e) => setExpiryDate(e.target.value)}
-          />
-        </div>
-        <div>
-          <FieldLabel>Seller company *</FieldLabel>
-          <input
-            className={inputBase}
-            placeholder="Company recording this sale"
-            value={sellerCompany}
-            onChange={(e) => setSellerCompany(e.target.value)}
           />
         </div>
         <div>

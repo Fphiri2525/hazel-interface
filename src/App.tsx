@@ -5,7 +5,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/components/AuthProvider";
-import ProtectedRoute from "@/components/Protectedroute";
+import ProtectedRoute from '@/components/protectedroute';
 import DashboardLayout from "@/components/DashboardLayout";
 import Login from './lib/pages/Login';
 import Register from './lib/pages/Register';
@@ -65,10 +65,11 @@ const App = () => (
             <Route
               path="/certificate-officer"
               element={
-                <ProtectedRoute allowedRoles={["CERTIFICATION_OFFICER"]}>
+                <ProtectedRoute allowedRoles={["COMPANY"]}>
                   <CertificateLayout />
                 </ProtectedRoute>
               }
+              
             >
               <Route path="product-decision" element={<ProductDecision />} />
               <Route path="record-product"   element={<RecordProduct />} />

@@ -14,7 +14,7 @@ const API_BASE_URL = "http://localhost:5000";
 const LOGIN_URL = `${API_BASE_URL}/api/auth/login`;
 const STORAGE_KEY = "mbs_user";
 
-type Role = "ADMIN" | "CERTIFICATION_OFFICER" | "INSPECTOR";
+type Role = "ADMIN" | "company" | "INSPECTOR";
 
 interface LoggedInUser {
   id: number;
@@ -24,7 +24,7 @@ interface LoggedInUser {
 }
 
 const ROUTES_BY_ROLE: Record<Role, string> = {
-  CERTIFICATION_OFFICER: "/certificate-officer/product-decision",
+  company: "/certificate-officer/product-decision",
   INSPECTOR:             "/inspector/dashboard",
   ADMIN:                 "/dashboard",
 };

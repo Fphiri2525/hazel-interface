@@ -1,8 +1,8 @@
 import * as React from "react";
-import { ShieldCheck, XCircle, AlertTriangle } from "lucide-react";
+import { Truck, Package, AlertTriangle } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { fetchProductStats, type ProductStats } from './productStats';
+import { fetchDistributionStats, type DistributionStats } from './productStats';
 
 function StatCard({
   label,
@@ -39,11 +39,17 @@ function StatCard({
   );
 }
 
-export default function ProductDecision() {
-  const [stats, setStats] = React.useState<ProductStats>({
-    total: 0,
-    certified: 0,
-    rejected: 0,
+export default function DistributionSummary() {
+  const storedUser = React.useMemo(
+    () => JSON.parse(localStorage.getItem("mbs_user") || "{}"),
+    []
+  );
+  const loggedInCompanyName: string = storedUser?.company_name ?? "";
+
+  const [stats, setStats] = React.useState<DistributionStats>({
+    totalRecords: 0,
+    totalQuantity: 0,
+    expiringSoon: 0,
   });
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState("");
@@ -55,7 +61,7 @@ export default function ProductDecision() {
       setLoading(true);
       setError("");
       try {
-        const { stats: nextStats } = await fetchProductStats();
+        const { stats: nextStats } = await fetchDistributionStats(loggedInCompanyName);
         if (isMounted) setStats(nextStats);
       } catch (err) {
         if (isMounted) {
@@ -72,7 +78,8 @@ export default function ProductDecision() {
     return () => {
       isMounted = false;
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loggedInCompanyName]);
 
   return (
     <div className="space-y-6">
@@ -84,20 +91,25 @@ export default function ProductDecision() {
       )}
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-        <StatCard label="Total Records" value={stats.total} loading={loading} />
         <StatCard
-          label="Certified"
-          value={stats.certified}
-          tone="primary"
+          label="Total Records"
+          value={stats.totalRecords}
           loading={loading}
-          icon={<ShieldCheck className="h-6 w-6 text-primary" />}
+          icon={<Truck className="h-6 w-6 text-muted-foreground" />}
         />
         <StatCard
-          label="Rejected"
-          value={stats.rejected}
+          label="Total Quantity Distributed"
+          value={stats.totalQuantity}
+          tone="primary"
+          loading={loading}
+          icon={<Package className="h-6 w-6 text-primary" />}
+        />
+        <StatCard
+          label="Expiring Soon"
+          value={stats.expiringSoon}
           tone="destructive"
           loading={loading}
-          icon={<XCircle className="h-6 w-6 text-destructive" />}
+          icon={<AlertTriangle className="h-6 w-6 text-destructive" />}
         />
       </div>
     </div>

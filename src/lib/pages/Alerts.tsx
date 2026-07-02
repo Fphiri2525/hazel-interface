@@ -1,14 +1,33 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Bell, AlertTriangle, Clock, CheckCircle, Loader2 } from "lucide-react";
+import { Bell, AlertTriangle, Clock, MapPin, Building2, CheckCircle, Loader2 } from "lucide-react";
 
 const API_BASE_URL = "http://localhost:5000";
 
 const ICON_MAP: Record<string, any> = {
   expiring_product:  Clock,
   failed_inspection: AlertTriangle,
-  cert_issue:        Bell,
 };
+
+function DaysBadge({ daysLeft }: { daysLeft?: number }) {
+  if (daysLeft === undefined || daysLeft === null) return null;
+  if (daysLeft < 0) {
+    return (
+      <span className="mt-1 inline-block rounded px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700">
+        Expired {Math.abs(daysLeft)} day(s) ago
+      </span>
+    );
+  }
+  const color =
+    daysLeft <= 7  ? "bg-red-100 text-red-700"     :
+    daysLeft <= 30 ? "bg-amber-100 text-amber-700" :
+                      "bg-yellow-50 text-yellow-700";
+  return (
+    <span className={`mt-1 inline-block rounded px-2 py-0.5 text-xs font-medium ${color}`}>
+      {daysLeft} day(s) remaining
+    </span>
+  );
+}
 
 const Alerts = () => {
   const [data, setData]       = useState<any>(null);
@@ -51,12 +70,12 @@ const Alerts = () => {
       </div>
 
       {/* Summary cards */}
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         <Card>
           <CardContent className="flex items-center gap-3 p-4">
             <Clock className="h-5 w-5 text-warning" />
             <div>
-              <p className="text-sm text-muted-foreground">Expiring Products</p>
+              <p className="text-sm text-muted-foreground">Expiring / Expired Products</p>
               <p className="text-xl font-bold text-foreground">{counts.expiringProducts}</p>
             </div>
           </CardContent>
@@ -67,15 +86,6 @@ const Alerts = () => {
             <div>
               <p className="text-sm text-muted-foreground">Failed Inspections</p>
               <p className="text-xl font-bold text-foreground">{counts.failedInspections}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="flex items-center gap-3 p-4">
-            <Bell className="h-5 w-5 text-destructive" />
-            <div>
-              <p className="text-sm text-muted-foreground">Cert Issues</p>
-              <p className="text-xl font-bold text-foreground">{counts.certIssues}</p>
             </div>
           </CardContent>
         </Card>
@@ -101,18 +111,29 @@ const Alerts = () => {
                 <Icon className={`mt-0.5 h-5 w-5 shrink-0 ${
                   alert.type === "danger" ? "text-destructive" : "text-warning"
                 }`} />
-                <div>
+                <div className="flex-1">
                   <p className="font-medium text-foreground">{alert.title}</p>
                   <p className="text-sm text-muted-foreground">{alert.detail}</p>
-                  {alert.daysLeft !== undefined && (
-                    <span className={`mt-1 inline-block rounded px-2 py-0.5 text-xs font-medium ${
-                      alert.daysLeft <= 7  ? "bg-red-100 text-red-700"    :
-                      alert.daysLeft <= 30 ? "bg-amber-100 text-amber-700":
-                                             "bg-yellow-50 text-yellow-700"
-                    }`}>
-                      {alert.daysLeft} days remaining
-                    </span>
+
+                  {/* Location + buyer, shown explicitly for expiring products */}
+                  {(alert.location || alert.buyer) && (
+                    <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                      {alert.location && (
+                        <span className="flex items-center gap-1">
+                          <MapPin className="h-3 w-3" /> {alert.location}
+                        </span>
+                      )}
+                      {alert.buyer && (
+                        <span className="flex items-center gap-1">
+                          <Building2 className="h-3 w-3" />
+                          {alert.category === "expiring_product" ? "Bought by " : "Business: "}
+                          {alert.buyer}
+                        </span>
+                      )}
+                    </div>
                   )}
+
+                  <DaysBadge daysLeft={alert.daysLeft} />
                 </div>
               </CardContent>
             </Card>

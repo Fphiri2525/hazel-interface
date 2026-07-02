@@ -8,10 +8,8 @@ import logoImg from "@/assets/mbs-logo.png";
 
 const navItems = [
   { label: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
-  { label: "Products", icon: Package, path: "/products" },
+  { label: "Distributed Products", icon: Award, path: "/certifications" },
   { label: "Inspections", icon: ClipboardCheck, path: "/inspections" },
-  { label: "Lab Results", icon: FlaskConical, path: "/lab-results" },
-  { label: "Certifications", icon: Award, path: "/certifications" },
   { label: "Compliance", icon: ShieldCheck, path: "/compliance" },
   { label: "Alerts", icon: Bell, path: "/alerts" },
   { label: "Users", icon: Users, path: "/users", adminOnly: true },

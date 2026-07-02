@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,39 +21,44 @@ import {
 } from "@/components/ui/select";
 import { Plus, Loader2, AlertTriangle } from "lucide-react";
 
-/* ────────────────────────────────────────────────────────────────────────
-   Users — backed by the real API instead of DEMO_USERS.
-
-   GET  /api/users  → list users (id, name, email, role, created_at)
-   POST /api/users   → create user { name, email, password, role }
-
-   Roles match what's already used across the app: admin, inspector,
-   lab_personnel, supervisor.
-   ──────────────────────────────────────────────────────────────────────── */
-
-// LOCAL DEV: point this at your Node server. Update the port if you
-// changed PORT in your .env.
 const API_BASE_URL = "http://localhost:5000";
 const USERS_URL = `${API_BASE_URL}/api/users`;
+
+type Role =
+  | "ADMIN"
+  | "IMPORT_OFFICER"
+  | "CERTIFICATION_OFFICER"
+  | "INSPECTOR"
+  | "COMPANY";
 
 interface User {
   id: number;
   full_name: string;
   email: string;
-  role: "ADMIN" | "CERTIFICATION_OFFICER" | "INSPECTOR";
+  role: Role;
   created_at?: string;
+  company_id?: number | null;
+  company_name?: string | null;
+  registration_number?: string | null;
+  address?: string | null;
+  contact_person?: string | null;
+  company_phone?: string | null;
 }
 
-const ROLE_OPTIONS: { value: User["role"]; label: string }[] = [
+const ROLE_OPTIONS: { value: Role; label: string }[] = [
   { value: "ADMIN", label: "Admin" },
+  { value: "IMPORT_OFFICER", label: "Import Officer" },
   { value: "CERTIFICATION_OFFICER", label: "Certification Officer" },
   { value: "INSPECTOR", label: "Inspector" },
+  { value: "COMPANY", label: "Company" },
 ];
 
 const roleColors: Record<string, string> = {
   ADMIN: "bg-primary/10 text-primary border-primary/30",
+  IMPORT_OFFICER: "bg-warning/10 text-warning border-warning/30",
   CERTIFICATION_OFFICER: "bg-success/10 text-success border-success/30",
   INSPECTOR: "bg-info/10 text-info border-info/30",
+  COMPANY: "bg-secondary/10 text-secondary-foreground border-secondary/30",
 };
 
 const Users = () => {
@@ -62,14 +67,31 @@ const Users = () => {
   const [loadError, setLoadError] = React.useState("");
 
   const [dialogOpen, setDialogOpen] = React.useState(false);
+
   const [fullName, setFullName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
-  const [role, setRole] = React.useState<User["role"] | "">("");
+  const [role, setRole] = React.useState<Role | "">("");
+
+  const [companyName, setCompanyName] = React.useState("");
+  const [registrationNumber, setRegistrationNumber] = React.useState("");
+  const [address, setAddress] = React.useState("");
+  const [contactPerson, setContactPerson] = React.useState("");
+  const [phone, setPhone] = React.useState("");
+  const [companyEmail, setCompanyEmail] = React.useState("");
+
   const [submitting, setSubmitting] = React.useState(false);
   const [submitError, setSubmitError] = React.useState("");
 
-  const canSubmit = !!fullName && !!email && !!password && !!role && !submitting;
+  const isCompanyRole = role === "COMPANY";
+
+  const canSubmit =
+    !!fullName.trim() &&
+    !!email.trim() &&
+    !!password &&
+    !!role &&
+    (!isCompanyRole || !!companyName.trim()) &&
+    !submitting;
 
   async function fetchUsers() {
     setLoading(true);
@@ -98,6 +120,12 @@ const Users = () => {
     setEmail("");
     setPassword("");
     setRole("");
+    setCompanyName("");
+    setRegistrationNumber("");
+    setAddress("");
+    setContactPerson("");
+    setPhone("");
+    setCompanyEmail("");
     setSubmitError("");
   }
 
@@ -106,11 +134,29 @@ const Users = () => {
     setSubmitting(true);
     setSubmitError("");
 
+    const payload: Record<string, unknown> = {
+      full_name: fullName,
+      email,
+      password,
+      role,
+    };
+
+    if (isCompanyRole) {
+      payload.company = {
+        company_name: companyName,
+        registration_number: registrationNumber || null,
+        address: address || null,
+        contact_person: contactPerson || null,
+        phone: phone || null,
+        email: companyEmail || null,
+      };
+    }
+
     try {
       const res = await fetch(USERS_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ full_name: fullName, email, password, role }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
 
@@ -151,7 +197,7 @@ const Users = () => {
               Add User
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Add User</DialogTitle>
             </DialogHeader>
@@ -198,7 +244,7 @@ const Users = () => {
 
               <div className="space-y-1.5">
                 <Label htmlFor="user-role">Role</Label>
-                <Select value={role} onValueChange={(v) => setRole(v as User["role"])}>
+                <Select value={role} onValueChange={(v) => setRole(v as Role)}>
                   <SelectTrigger id="user-role">
                     <SelectValue placeholder="Select a role…" />
                   </SelectTrigger>
@@ -211,6 +257,75 @@ const Users = () => {
                   </SelectContent>
                 </Select>
               </div>
+
+              {isCompanyRole && (
+                <div className="space-y-4 rounded-md border border-border bg-muted/30 p-4">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Company details
+                  </p>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="company-name">Company name *</Label>
+                    <Input
+                      id="company-name"
+                      value={companyName}
+                      onChange={(e) => setCompanyName(e.target.value)}
+                      placeholder="e.g. Illovo Ltd"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="company-reg">Registration number</Label>
+                    <Input
+                      id="company-reg"
+                      value={registrationNumber}
+                      onChange={(e) => setRegistrationNumber(e.target.value)}
+                      placeholder="e.g. 09876"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="company-address">Address</Label>
+                    <Input
+                      id="company-address"
+                      value={address}
+                      onChange={(e) => setAddress(e.target.value)}
+                      placeholder="Physical address"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="company-contact">Contact person</Label>
+                    <Input
+                      id="company-contact"
+                      value={contactPerson}
+                      onChange={(e) => setContactPerson(e.target.value)}
+                      placeholder="Name of contact"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="company-phone">Phone</Label>
+                    <Input
+                      id="company-phone"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="e.g. 0983340295"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="company-email">Company email</Label>
+                    <Input
+                      id="company-email"
+                      type="email"
+                      value={companyEmail}
+                      onChange={(e) => setCompanyEmail(e.target.value)}
+                      placeholder="company@example.com"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             <DialogFooter>
@@ -255,6 +370,7 @@ const Users = () => {
                   <th className="px-4 py-3 font-medium">Name</th>
                   <th className="px-4 py-3 font-medium">Email</th>
                   <th className="px-4 py-3 font-medium">Role</th>
+                  <th className="px-4 py-3 font-medium">Company</th>
                 </tr>
               </thead>
               <tbody>
@@ -269,6 +385,9 @@ const Users = () => {
                       >
                         {u.role.replace(/_/g, " ").toLowerCase()}
                       </Badge>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {u.role === "COMPANY" ? u.company_name ?? "—" : "—"}
                     </td>
                   </tr>
                 ))}

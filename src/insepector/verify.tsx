@@ -1,11 +1,8 @@
 // src/inspector/VerifyProduct.tsx
 import * as React from "react";
 import {
-  Camera,
   CheckCircle,
-  XCircle,
   AlertTriangle,
-  MinusCircle,
   Package,
   Building2,
   MapPin,
@@ -15,17 +12,17 @@ import {
   ShoppingBag,
   Scan,
   RotateCcw,
-  AlertOctagon,
   Info,
   Download,
   Share2,
   Printer,
   Search,
   Loader2,
-  X,
+  User,
+  Phone,
+  Truck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Html5Qrcode } from "html5-qrcode";
 
 const API_BASE_URL = "http://localhost:5000";
 
@@ -33,18 +30,28 @@ const API_BASE_URL = "http://localhost:5000";
 interface ProductVerification {
   id: string;
   productName: string;
-  brandName?: string;
-  manufacturerName: string;
-  countryOfOrigin?: string;
   category: string;
   batchNumber: string;
-  certificateNumber: string;
-  approvalDate?: string;
   expiryDate: string | null;
-  imageUrl?: string;
-  status: "certified" | "rejected" | "expired" | "suspended" | "unregistered";
-  lastInspectionDate?: string;
-  certificationBody?: string;
+  status: "certified" | "expired" | "unknown"; // Added "unknown" as a valid status
+  manufacturerName: string;
+  delivery: {
+    quantity: number | null;
+    unitPrice: number | null;
+    transactionDate: string | null;
+    deliveryDate: string | null;
+    invoiceReference: string | null;
+    notes: string | null;
+  };
+  buyer: {
+    companyName: string | null;
+    registrationNumber: string | null;
+    contactPerson: string | null;
+    phone: string | null;
+    destinationAddress: string | null;
+  };
+  recordedBy?: string;
+  createdAt?: string;
 }
 
 // Shape returned by GET /api/verify/:code
@@ -53,36 +60,28 @@ interface VerifyApiResult {
   status: ProductVerification["status"];
   productName: string;
   category: string;
-  productType: string;
+  batchNumber: string;
+  expiryDate: string | null;
   manufacturer: {
-    id: number;
     name: string;
-    registrationNumber: string | null;
-    address: string | null;
-    contactNumber: string | null;
-    facilityLocation: string | null;
   };
-  batch: {
-    id: number;
-    batchNumber: string;
+  delivery: {
     quantity: number | null;
-    productionDate: string | null;
-    expiryDate: string | null;
-    packagingType: string | null;
+    unitPrice: number | null;
+    transactionDate: string | null;
+    deliveryDate: string | null;
+    invoiceReference: string | null;
+    notes: string | null;
   };
-  certificate: {
-    certificateNumber: string;
-    barcodeValue: string;
-    qrCodeValue: string;
-    issueDate: string;
-    expiryDate: string | null;
-    status: string;
+  buyer: {
+    companyName: string | null;
+    registrationNumber: string | null;
+    contactPerson: string | null;
+    phone: string | null;
+    destinationAddress: string | null;
   };
-  decision: {
-    status: string;
-    date: string;
-    remarks: Record<string, unknown>;
-  } | null;
+  recordedBy: string | null;
+  createdAt: string | null;
 }
 
 // Maps the API response shape onto the shape this component renders
@@ -90,36 +89,40 @@ function mapApiResultToProduct(r: VerifyApiResult): ProductVerification {
   return {
     id: r.id,
     productName: r.productName,
-    manufacturerName: r.manufacturer.name,
-    countryOfOrigin: r.manufacturer.facilityLocation || undefined,
     category: r.category,
-    batchNumber: r.batch.batchNumber,
-    certificateNumber: r.certificate.certificateNumber,
-    approvalDate: r.certificate.issueDate,
-    expiryDate: r.certificate.expiryDate,
-    status: r.status,
-    lastInspectionDate: r.decision?.date,
-    certificationBody: "Malawi Bureau of Standards",
+    batchNumber: r.batchNumber,
+    expiryDate: r.expiryDate,
+    status: r.status || "unknown", // Fallback to "unknown" if status is missing
+    manufacturerName: r.manufacturer?.name || "Unknown Manufacturer",
+    delivery: r.delivery || {
+      quantity: null,
+      unitPrice: null,
+      transactionDate: null,
+      deliveryDate: null,
+      invoiceReference: null,
+      notes: null,
+    },
+    buyer: r.buyer || {
+      companyName: null,
+      registrationNumber: null,
+      contactPerson: null,
+      phone: null,
+      destinationAddress: null,
+    },
+    recordedBy: r.recordedBy || undefined,
+    createdAt: r.createdAt || undefined,
   };
 }
 
-// Status Configuration
+// Status Configuration - Added "unknown" status
 const STATUS_CONFIG = {
   certified: {
-    label: "Certified",
+    label: "Valid",
     icon: CheckCircle,
     color: "text-green-600 dark:text-green-400",
     bgColor: "bg-green-500/10 dark:bg-green-500/20",
     borderColor: "border-green-500/30",
-    description: "Product meets all MBS standards",
-  },
-  rejected: {
-    label: "Rejected",
-    icon: XCircle,
-    color: "text-red-600 dark:text-red-400",
-    bgColor: "bg-red-500/10 dark:bg-red-500/20",
-    borderColor: "border-red-500/30",
-    description: "Product does not meet MBS standards",
+    description: "Batch found and within its expiry window",
   },
   expired: {
     label: "Expired",
@@ -127,29 +130,22 @@ const STATUS_CONFIG = {
     color: "text-orange-600 dark:text-orange-400",
     bgColor: "bg-orange-500/10 dark:bg-orange-500/20",
     borderColor: "border-orange-500/30",
-    description: "Product certification has expired",
+    description: "This batch has passed its expiry date",
   },
-  suspended: {
-    label: "Suspended",
-    icon: AlertOctagon,
-    color: "text-yellow-600 dark:text-yellow-400",
-    bgColor: "bg-yellow-500/10 dark:bg-yellow-500/20",
-    borderColor: "border-yellow-500/30",
-    description: "Product certification temporarily suspended",
-  },
-  unregistered: {
-    label: "Unregistered",
-    icon: MinusCircle,
+  unknown: {
+    label: "Unknown",
+    icon: AlertTriangle,
     color: "text-gray-600 dark:text-gray-400",
     bgColor: "bg-gray-500/10 dark:bg-gray-500/20",
     borderColor: "border-gray-500/30",
-    description: "Product not registered with MBS",
+    description: "Status information is unavailable",
   },
 };
 
-// Sub-components
+// Sub-components - Updated with fallback
 const StatusBadge: React.FC<{ status: ProductVerification["status"] }> = ({ status }) => {
-  const config = STATUS_CONFIG[status];
+  // Use the status if it exists and is valid, otherwise use "unknown"
+  const config = STATUS_CONFIG[status] || STATUS_CONFIG.unknown;
   const Icon = config.icon;
 
   return (
@@ -165,8 +161,9 @@ const StatusBadge: React.FC<{ status: ProductVerification["status"] }> = ({ stat
   );
 };
 
+// Updated StatusDetails with fallback
 const StatusDetails: React.FC<{ status: ProductVerification["status"] }> = ({ status }) => {
-  const config = STATUS_CONFIG[status];
+  const config = STATUS_CONFIG[status] || STATUS_CONFIG.unknown;
   return (
     <div className={cn(
       "mt-2 rounded-lg border p-2.5",
@@ -225,107 +222,18 @@ const ActionButton: React.FC<{
   );
 };
 
-// ---------------------------------------------------------------------------
-// QR Scanner — opens the device camera and decodes QR codes in real time
-// using html5-qrcode. Calls onDecoded(text) the first time a code is read,
-// then stops itself.
-// ---------------------------------------------------------------------------
-const QR_REGION_ID = "verify-qr-scanner-region";
-
-const QrScannerModal: React.FC<{
-  onDecoded: (text: string) => void;
-  onClose: () => void;
-}> = ({ onDecoded, onClose }) => {
-  const scannerRef = React.useRef<Html5Qrcode | null>(null);
-  const [cameraError, setCameraError] = React.useState<string | null>(null);
-  const hasDecodedRef = React.useRef(false);
-
-  React.useEffect(() => {
-    const scanner = new Html5Qrcode(QR_REGION_ID);
-    scannerRef.current = scanner;
-    let cancelled = false;
-
-    scanner
-      .start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 240, height: 240 } },
-        (decodedText) => {
-          if (hasDecodedRef.current || cancelled) return;
-          hasDecodedRef.current = true;
-          onDecoded(decodedText);
-        },
-        () => {
-          // per-frame "no QR found yet" callback — intentionally ignored
-        }
-      )
-      .catch((err) => {
-        if (!cancelled) {
-          setCameraError(
-            err?.message?.includes("Permission")
-              ? "Camera access was denied. Please allow camera permissions and try again."
-              : "Could not start the camera on this device."
-          );
-        }
-      });
-
-    return () => {
-      cancelled = true;
-      const s = scannerRef.current;
-      if (s) {
-        s.stop()
-          .then(() => s.clear())
-          .catch(() => {
-            // scanner was already stopped/never started — safe to ignore
-          });
-      }
-    };
-  }, [onDecoded]);
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="w-full max-w-sm rounded-xl bg-card p-4 shadow-xl">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-foreground">Scan Product QR Code</h3>
-          <button
-            onClick={onClose}
-            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-            aria-label="Close scanner"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        {cameraError ? (
-          <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-600 dark:text-red-400">
-            {cameraError}
-          </div>
-        ) : (
-          <div
-            id={QR_REGION_ID}
-            className="overflow-hidden rounded-lg bg-black"
-            style={{ minHeight: 260 }}
-          />
-        )}
-
-        <p className="mt-3 text-center text-[10px] text-muted-foreground">
-          Point the camera at the product's QR code
-        </p>
-      </div>
-    </div>
-  );
-};
+const formatMoney = (v: number | null) =>
+  v === null || v === undefined ? "N/A" : `MWK ${Number(v).toLocaleString()}`;
 
 // Main Component
 export default function VerifyProduct() {
-  const [showScanner, setShowScanner] = React.useState(false);
   const [scanned, setScanned] = React.useState(false);
   const [product, setProduct] = React.useState<ProductVerification | null>(null);
   const [productCode, setProductCode] = React.useState("");
   const [isSearching, setIsSearching] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  // Shared lookup: calls GET /api/verify/:code with whatever code we have,
-  // whether it came from typing or from a decoded QR scan.
+  // Calls GET /api/verify/:code with the batch number that was typed in.
   const verifyCode = React.useCallback(async (code: string) => {
     setError(null);
     setIsSearching(true);
@@ -334,7 +242,7 @@ export default function VerifyProduct() {
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        setError(data.error || "Product not found. Please check the code and try again.");
+        setError(data.error || "Batch not found. Please check the number and try again.");
         setProduct(null);
         setScanned(false);
         return;
@@ -353,7 +261,7 @@ export default function VerifyProduct() {
 
   const handleSearch = () => {
     if (!productCode.trim()) {
-      setError("Please enter a certificate number");
+      setError("Please enter a product batch number");
       return;
     }
     verifyCode(productCode.trim());
@@ -363,12 +271,6 @@ export default function VerifyProduct() {
     if (e.key === "Enter") {
       handleSearch();
     }
-  };
-
-  const handleQrDecoded = (text: string) => {
-    setShowScanner(false);
-    setProductCode(text);
-    verifyCode(text);
   };
 
   const handleReset = () => {
@@ -388,11 +290,11 @@ export default function VerifyProduct() {
       <div>
         <h1 className="text-xl font-bold text-foreground">Verify Product</h1>
         <p className="text-xs text-muted-foreground">
-          Scan a QR code or enter the certificate number to verify certification status
+          Enter the product batch number to retrieve product, expiry, and manufacturer details
         </p>
       </div>
 
-      {/* Scanner Section */}
+      {/* Verification Section */}
       <div className="rounded-lg border border-border bg-card p-4">
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -411,75 +313,49 @@ export default function VerifyProduct() {
         </div>
 
         {!scanned ? (
-          <div className="space-y-4">
-            {/* Scanner Button */}
-            <button
-              onClick={() => setShowScanner(true)}
-              className={cn(
-                "relative flex w-full flex-col items-center justify-center rounded-lg border-2 border-dashed border-primary/30 bg-muted/30 py-6 transition-all",
-                "hover:border-primary hover:bg-muted/50"
-              )}
-            >
-              <div className="relative">
-                <div className="absolute -inset-1 rounded-full bg-primary/20 blur-sm" />
-                <div className="relative rounded-full bg-primary/10 p-3 text-primary">
-                  <Camera className="h-6 w-6" />
-                </div>
+          <div className="space-y-1.5">
+            {/* Manual Entry - Batch Number */}
+            <label className="text-xs font-medium text-foreground">
+              Enter Product Batch Number
+            </label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Hash className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="text"
+                  value={productCode}
+                  onChange={(e) => setProductCode(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="e.g. bbboooo7ty"
+                  className="w-full rounded-lg border border-border bg-background pl-8 pr-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+                  disabled={isSearching}
+                  autoFocus
+                />
+                {isSearching && (
+                  <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                  </div>
+                )}
               </div>
-              <p className="mt-2 text-sm font-medium text-foreground">Tap to Scan</p>
-              <p className="text-xs text-muted-foreground">Scan the product's QR code</p>
-            </button>
-
-            {/* Divider */}
-            <div className="flex items-center gap-3">
-              <div className="flex-1 border-t border-border" />
-              <span className="text-[10px] text-muted-foreground">OR</span>
-              <div className="flex-1 border-t border-border" />
+              <button
+                onClick={handleSearch}
+                disabled={!productCode.trim() || isSearching}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-medium text-primary-foreground transition-all",
+                  "hover:bg-primary/90 hover:scale-105",
+                  "disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+                )}
+              >
+                <Search className="h-3.5 w-3.5" />
+                Verify
+              </button>
             </div>
-
-            {/* Manual Entry - Certificate Number */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-foreground">
-                Enter Certificate Number
-              </label>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Hash className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                  <input
-                    type="text"
-                    value={productCode}
-                    onChange={(e) => setProductCode(e.target.value)}
-                    onKeyPress={handleKeyPress}
-                    placeholder="e.g. MBS-A1B2C3D4"
-                    className="w-full rounded-lg border border-border bg-background pl-8 pr-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-                    disabled={isSearching}
-                  />
-                  {isSearching && (
-                    <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
-                      <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-                    </div>
-                  )}
-                </div>
-                <button
-                  onClick={handleSearch}
-                  disabled={!productCode.trim() || isSearching}
-                  className={cn(
-                    "flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-medium text-primary-foreground transition-all",
-                    "hover:bg-primary/90 hover:scale-105",
-                    "disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
-                  )}
-                >
-                  <Search className="h-3.5 w-3.5" />
-                  Verify
-                </button>
-              </div>
-              {error && (
-                <p className="text-xs text-red-500">{error}</p>
-              )}
-              <p className="text-[10px] text-muted-foreground">
-                Enter the certificate number printed on the product label
-              </p>
-            </div>
+            {error && (
+              <p className="text-xs text-red-500">{error}</p>
+            )}
+            <p className="text-[10px] text-muted-foreground">
+              Enter the batch number printed on the product label or delivery invoice
+            </p>
           </div>
         ) : (
           // Verification Result
@@ -492,22 +368,22 @@ export default function VerifyProduct() {
                 </div>
                 <div>
                   <h3 className="text-sm font-semibold text-foreground">
-                    {product?.productName}
+                    {product?.productName || "Unknown Product"}
                   </h3>
                   <p className="text-xs text-muted-foreground">
-                    {product?.manufacturerName}
+                    {product?.manufacturerName || "Unknown Manufacturer"}
                   </p>
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <StatusBadge status={product?.status || "unregistered"} />
+                <StatusBadge status={product?.status || "unknown"} />
                 <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                  {product?.id}
+                  {product?.id || "N/A"}
                 </span>
               </div>
             </div>
 
-            <StatusDetails status={product?.status || "unregistered"} />
+            <StatusDetails status={product?.status || "unknown"} />
 
             {/* Product Details */}
             <div className="rounded-lg border border-border bg-muted/30 p-3">
@@ -516,41 +392,41 @@ export default function VerifyProduct() {
                 <div className="space-y-0 sm:pr-3">
                   <DetailRow
                     icon={<Building2 className="h-3.5 w-3.5" />}
-                    label="Manufacturer"
+                    label="Manufacturer / Supplier"
                     value={product?.manufacturerName || "N/A"}
-                  />
-                  <DetailRow
-                    icon={<MapPin className="h-3.5 w-3.5" />}
-                    label="Facility Location"
-                    value={product?.countryOfOrigin || "N/A"}
                   />
                   <DetailRow
                     icon={<ShoppingBag className="h-3.5 w-3.5" />}
                     label="Category"
                     value={product?.category || "N/A"}
                   />
-                </div>
-                <div className="space-y-0 sm:pl-3">
                   <DetailRow
                     icon={<Hash className="h-3.5 w-3.5" />}
                     label="Batch Number"
                     value={product?.batchNumber || "N/A"}
                   />
-                  <DetailRow
-                    icon={<FileText className="h-3.5 w-3.5" />}
-                    label="Certificate Number"
-                    value={product?.certificateNumber || "N/A"}
-                  />
+                </div>
+                <div className="space-y-0 sm:pl-3">
                   <DetailRow
                     icon={<Calendar className="h-3.5 w-3.5" />}
-                    label="Issue Date"
-                    value={product?.approvalDate || "N/A"}
+                    label="Expiry Date"
+                    value={product?.expiryDate || "N/A"}
+                  />
+                  <DetailRow
+                    icon={<FileText className="h-3.5 w-3.5" />}
+                    label="Invoice Reference"
+                    value={product?.delivery?.invoiceReference || "N/A"}
+                  />
+                  <DetailRow
+                    icon={<Truck className="h-3.5 w-3.5" />}
+                    label="Delivery Date"
+                    value={product?.delivery?.deliveryDate || "N/A"}
                   />
                 </div>
               </div>
             </div>
 
-            {/* Expiry & Certification Info */}
+            {/* Expiry & Delivery Info */}
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-lg border border-border p-3">
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -575,14 +451,45 @@ export default function VerifyProduct() {
               <div className="rounded-lg border border-border p-3">
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Info className="h-3.5 w-3.5" />
-                  Certification Body
+                  Quantity / Unit Price
                 </div>
                 <p className="mt-1 text-sm font-semibold text-foreground">
-                  {product?.certificationBody || "N/A"}
+                  {product?.delivery?.quantity ?? "N/A"} units
                 </p>
                 <p className="mt-0.5 text-[10px] text-muted-foreground">
-                  Last Decision: {product?.lastInspectionDate || "N/A"}
+                  {formatMoney(product?.delivery?.unitPrice ?? null)} per unit
                 </p>
+              </div>
+            </div>
+
+            {/* Buyer / Destination Details */}
+            <div className="rounded-lg border border-border bg-muted/30 p-3">
+              <h4 className="mb-2 text-xs font-semibold text-foreground">Buyer / Destination</h4>
+              <div className="grid gap-0 divide-y divide-border sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+                <div className="space-y-0 sm:pr-3">
+                  <DetailRow
+                    icon={<Building2 className="h-3.5 w-3.5" />}
+                    label="Buyer Company"
+                    value={product?.buyer?.companyName || "N/A"}
+                  />
+                  <DetailRow
+                    icon={<User className="h-3.5 w-3.5" />}
+                    label="Contact Person"
+                    value={product?.buyer?.contactPerson || "N/A"}
+                  />
+                </div>
+                <div className="space-y-0 sm:pl-3">
+                  <DetailRow
+                    icon={<Phone className="h-3.5 w-3.5" />}
+                    label="Contact Phone"
+                    value={product?.buyer?.phone || "N/A"}
+                  />
+                  <DetailRow
+                    icon={<MapPin className="h-3.5 w-3.5" />}
+                    label="Destination Address"
+                    value={product?.buyer?.destinationAddress || "N/A"}
+                  />
+                </div>
               </div>
             </div>
 
@@ -625,13 +532,6 @@ export default function VerifyProduct() {
           </div>
         )}
       </div>
-
-      {showScanner && (
-        <QrScannerModal
-          onDecoded={handleQrDecoded}
-          onClose={() => setShowScanner(false)}
-        />
-      )}
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { createContext, useContext } from "react";
 
 const STORAGE_KEY = "mbs_user";
 
-export type Role = "ADMIN" | "CERTIFICATION_OFFICER" | "INSPECTOR";
+export type Role = "ADMIN" | "company" | "INSPECTOR"
 
 export interface User {
   id: number;
